@@ -114,6 +114,10 @@ def decompile(out, code, start_index, name):
             print(f"    goto l{i+payload+2 if payload >= 0 else i+payload+1}", file=out)
         elif op == Action.Pop:
             stack.pop()
+        elif op == Action.GetUrl2:
+            o2 = stack.pop()
+            o1 = stack.pop()
+            print(f"    GetUrl2({o1}, {o2})", file=out)
         else:
             assert False, (op, payload)
     print("", file=out)

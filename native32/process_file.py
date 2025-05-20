@@ -79,6 +79,7 @@ class Native32Reader:
         cursor_size = 2*self.cursor_width*self.cursor_height
         self.cursor = bytes(self.data[self.idx:self.idx+cursor_size])
         self.idx += cursor_size
+        self.sound_table = self.idx
 
     def _get_str(self, offset):
         s = ''
@@ -129,10 +130,10 @@ class Native32Reader:
             if img_offset == 0xFFFFFFFF:
                 break
             img_width, img_height, img_size = struct.unpack("<HHL", self.data[self.base+img_offset:self.base+img_offset+8])
-            with open(f"images/{index}.bin", "wb") as f:
+            with open(f"images/{index+1}.bin", "wb") as f:
                 f.write(self.data[self.base+img_offset:self.base+img_offset+img_size+8]) # +8 to include header
             img = decode_image(self.data[self.base+img_offset:self.base+img_offset+img_size+8])
-            img.save(f"images/{index}.png", "PNG")
+            img.save(f"images/{index+1}.png", "PNG")
             index += 1
             i += 4
 
@@ -175,14 +176,81 @@ class Native32Reader:
                     if obj_type == ObjectType.Action:
                         decompile(f, self.actions, index, f"frame{i+1}_act{index}")
 
+            for i, movie in sorted(self.movies.items(), key=lambda x: x[0]):
+                for index, x, y, event, u2, u3 in movie:
+                    if event != 0:
+                        decompile(f, self.actions, event, f"movie{i}_act{event}")
+
+    def extract_movie(self, index):
+        idx_ptr = self.base + self.movie_idx + (4 * (index - 1))
+        ptr, = struct.unpack("<L", self.data[idx_ptr:idx_ptr+4])
+        ptr += self.base
+        items = []
+        while ptr < len(self.data) - 0x0C:
+            obj = struct.unpack("<HhhHHh", self.data[ptr:ptr+0xC])
+            if obj[0] == 0xFFFF or obj[0] == 0x0000:
+                break
+            items.append(obj)
+            ptr += 0xC
+        return items
+
+    def extract_movies(self):
+        self.movies = {}
+        movie_indices = set()
+        for frame in self.frames:
+            for obj_type, index, x, y, depth, name in frame:
+                if obj_type == ObjectType.Movie:
+                    movie_indices.add(index)
+        with open("movies.txt", "w") as f:
+            for i in sorted(movie_indices):
+                print(f"Movie {i}: ", file=f)
+                movie_frames = self.extract_movie(i)
+                self.movies[i] = movie_frames
+                for index, x, y, event, sound, u3 in movie_frames:
+                    print(f"    {index:5} X={x:3} Y={y:3} {event:5} {sound:5} {u3:5}", file=f)
+                print("", file=f)
+
+    def extract_sound(self, idx):
+        table_idx = self.sound_table + (idx - 1) * 4
+        ptr, = struct.unpack("<L", self.data[table_idx:table_idx+4])
+        print(f"Sound {idx:2d}: 0x{ptr:08x}")
+        flags = ptr & 0xF0000000
+        addr = ptr & 0x0FFFFFFF
+        if flags == 0xF0000000: # MP3 audio
+            # MP3 format
+            begin = self.base + self.mp3_offset + addr
+            size, unk = struct.unpack("<LH", self.data[begin:begin+6])
+            begin += 6
+            with open(f"sound/{idx}.mp3", "wb") as f:
+                f.write(self.data[begin:begin+size])
+        elif flags == 0x00000000: # raw samples
+            # 48000Hz, 16-bit, big endian, mono?
+            begin = self.base + addr
+            size, = struct.unpack("<L", self.data[begin:begin+4])
+            begin += 4
+            with open(f"sound/{idx}.bin", "wb") as f:
+                f.write(self.data[begin:begin+size])
+
+    def extract_sounds(self):
+        Path("sound").mkdir(exist_ok=True)
+        sound_indices = set()
+        for movie_frames in self.movies.values():
+            for index, x, y, event, sound, u3 in movie_frames:
+                if sound != 0:
+                    sound_indices.add(sound & 0xFF)
+        for sound in sorted(sound_indices):
+            self.extract_sound(sound)
+
     def run(self):
         self.skip_thumbnail()
         self.find_header()
         self.process_header()
         self.disassemble_actions()
         self.extract_frames()
+        self.extract_movies()
         self.decompile_actions()
         self.extract_images()
+        self.extract_sounds()
 
 if __name__ == '__main__':
     with open(sys.argv[1], 'rb') as f:
