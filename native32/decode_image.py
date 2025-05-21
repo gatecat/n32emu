@@ -3,14 +3,22 @@ import struct
 
 def decode_image(data):
     width, height, img_size = struct.unpack("<HHL", data[0:8])
-    out = bytearray(width * height * 3)
+    out = bytearray(width * height * 4)
     i = 8
     def _putxy(x, y, l, cr, cb):
-        cr -= 128
-        cb -= 128
-        out[(y * width + x) * 3 + 2] = min(max(l + (45 * cr) // 32, 0), 255)
-        out[(y * width + x) * 3 + 1] = min(max(l - (11 * cb + 23 * cr) // 32, 0), 255)
-        out[(y * width + x) * 3 + 0] = min(max(l + (113 * cb) // 64, 0), 255)
+        if cr == 0 and cb == 0:
+            out[(y * width + x) * 4 + 3] = 0
+            out[(y * width + x) * 4 + 2] = 0
+            out[(y * width + x) * 4 + 1] = 0
+            out[(y * width + x) * 4 + 0] = 0
+        else:
+            cr -= 128
+            cb -= 128
+            out[(y * width + x) * 4 + 2] = min(max(l + (45 * cr) // 32, 0), 255)
+            out[(y * width + x) * 4 + 1] = min(max(l - (11 * cb + 23 * cr) // 32, 0), 255)
+            out[(y * width + x) * 4 + 0] = min(max(l + (113 * cb) // 64, 0), 255)
+            out[(y * width + x) * 4 + 3] = 255
+
     def _putquad(pix, data):
         y = (pix // (width // 2))
         x = (pix % (width // 2))
@@ -38,5 +46,5 @@ def decode_image(data):
                 pixel += 1
             i += 6
     assert pixel == (width//2) * (height//2)
-    return Image.frombytes("RGB", (width, height), out)
+    return Image.frombytes("RGBA", (width, height), out)
 

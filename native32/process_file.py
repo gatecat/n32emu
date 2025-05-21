@@ -90,7 +90,7 @@ class Native32Reader:
             offset += 1
         return s
 
-    def disassemble_actions(self):
+    def disassemble_actions(self, out_dir):
         i = self.base + self.action_idx
         self.actions = []
         while i < len(self.data) - 8:
@@ -111,7 +111,7 @@ class Native32Reader:
             self.actions.append((act, payload))
             i += 8
 
-        with open("actions.txt", "w") as f:
+        with open(f"{out_dir}/actions.txt", "w") as f:
             for act, payload in self.actions:
                 if payload is None:
                     fmt_payload = ''
@@ -121,19 +121,19 @@ class Native32Reader:
                     fmt_payload = f' {payload}'
                 print(f"{act.name:16}{fmt_payload}", file=f)
 
-    def extract_images(self):
+    def extract_images(self, out_dir):
         i = self.base + self.image_idx
-        Path("images").mkdir(exist_ok=True)
+        Path(f"{out_dir}/images").mkdir(exist_ok=True)
         index = 0
         while i < len(self.data) - 4 and i != (self.base + self.movie_idx):
             img_offset, = struct.unpack("<L", self.data[i:i+4])
             if img_offset == 0xFFFFFFFF:
                 break
             img_width, img_height, img_size = struct.unpack("<HHL", self.data[self.base+img_offset:self.base+img_offset+8])
-            with open(f"images/{index+1}.bin", "wb") as f:
+            with open(f"{out_dir}/images/{index+1}.bin", "wb") as f:
                 f.write(self.data[self.base+img_offset:self.base+img_offset+img_size+8]) # +8 to include header
             img = decode_image(self.data[self.base+img_offset:self.base+img_offset+img_size+8])
-            img.save(f"images/{index+1}.png", "PNG")
+            img.save(f"{out_dir}/images/{index+1}.png", "PNG")
             index += 1
             i += 4
 
@@ -153,10 +153,10 @@ class Native32Reader:
             i += 0x10
         return objects
 
-    def extract_frames(self):
+    def extract_frames(self, out_dir):
         i = self.base + self.frame_idx
         self.frames = []
-        with open("frames.txt", "w") as f:
+        with open(f"{out_dir}/frames.txt", "w") as f:
             while i < len(self.data) - 0x04:
                 offset, = struct.unpack("<L", self.data[i:i+4])
                 if offset == 0x0 or offset > len(self.data):
@@ -169,13 +169,13 @@ class Native32Reader:
                 print("", file=f)
                 i += 4
 
-    def decompile_actions(self):
-        with open(f"frame_actions.txt", "w") as f:
+    def decompile_actions(self, out_dir):
+        with open(f"{out_dir}/frame_actions.txt", "w") as f:
             for i, frame in enumerate(self.frames):
                 for obj_type, index, x, y, depth, name in frame:
                     if obj_type == ObjectType.Action:
                         decompile(f, self.actions, index, f"frame{i+1}_act{index}")
-
+        with open(f"{out_dir}/movie_actions.txt", "w") as f:
             for i, movie in sorted(self.movies.items(), key=lambda x: x[0]):
                 for index, x, y, event, u2, u3 in movie:
                     if event != 0:
@@ -194,14 +194,14 @@ class Native32Reader:
             ptr += 0xC
         return items
 
-    def extract_movies(self):
+    def extract_movies(self, out_dir):
         self.movies = {}
         movie_indices = set()
         for frame in self.frames:
             for obj_type, index, x, y, depth, name in frame:
                 if obj_type == ObjectType.Movie:
                     movie_indices.add(index)
-        with open("movies.txt", "w") as f:
+        with open(f"{out_dir}/movies.txt", "w") as f:
             for i in sorted(movie_indices):
                 print(f"Movie {i}: ", file=f)
                 movie_frames = self.extract_movie(i)
@@ -210,7 +210,7 @@ class Native32Reader:
                     print(f"    {index:5} X={x:3} Y={y:3} {event:5} {sound:5} {u3:5}", file=f)
                 print("", file=f)
 
-    def extract_sound(self, idx):
+    def extract_sound(self, idx, out_dir):
         table_idx = self.sound_table + (idx - 1) * 4
         ptr, = struct.unpack("<L", self.data[table_idx:table_idx+4])
         print(f"Sound {idx:2d}: 0x{ptr:08x}")
@@ -221,37 +221,71 @@ class Native32Reader:
             begin = self.base + self.mp3_offset + addr
             size, unk = struct.unpack("<LH", self.data[begin:begin+6])
             begin += 6
-            with open(f"sound/{idx}.mp3", "wb") as f:
+            with open(f"{out_dir}/sound/{idx}.mp3", "wb") as f:
                 f.write(self.data[begin:begin+size])
         elif flags == 0x00000000: # raw samples
-            # 48000Hz, 16-bit, big endian, mono?
+            # 22050Hz?, 16-bit, big endian, mono?
             begin = self.base + addr
             size, = struct.unpack("<L", self.data[begin:begin+4])
             begin += 4
-            with open(f"sound/{idx}.bin", "wb") as f:
+            with open(f"{out_dir}/sound/{idx}.bin", "wb") as f:
                 f.write(self.data[begin:begin+size])
 
-    def extract_sounds(self):
-        Path("sound").mkdir(exist_ok=True)
+    def extract_sounds(self, out_dir):
+        Path(f"{out_dir}/sound").mkdir(exist_ok=True)
         sound_indices = set()
         for movie_frames in self.movies.values():
             for index, x, y, event, sound, u3 in movie_frames:
                 if sound != 0:
                     sound_indices.add(sound & 0xFF)
         for sound in sorted(sound_indices):
-            self.extract_sound(sound)
+            self.extract_sound(sound, out_dir)
 
-    def run(self):
+    def decompile_button(self, button, f):
+        print(f"# Button {button}", file=f)
+        btn_table_idx = self.base + self.button_idx + (button - 1) * 4
+        ptr, = struct.unpack("<L", self.data[btn_table_idx:btn_table_idx+4])
+        ptr += self.base
+        for i in range(4):
+            image, x, y, depth = struct.unpack("<HHHH", self.data[ptr:ptr+8])
+            print(f"# Image {image:4} X={x:3} Y={y:3} depth={depth:3}", file=f)
+            ptr += 0x8
+        cond_table_idx = self.base + self.button_cond_idx + (button - 1) * 4
+        ptr, = struct.unpack("<L", self.data[cond_table_idx:cond_table_idx+4])
+        ptr += self.base
+        total_act_len, = struct.unpack("<H", self.data[ptr:ptr+2])
+        ptr += 2
+        i = 0
+        while i < total_act_len:
+            keycode, act_len, event = struct.unpack("<HHH", self.data[ptr:ptr+6])
+            decompile(f, self.actions, event, f"button{button}_keycode{keycode:04x}_act{event}")
+            i += act_len # what is this really??
+            ptr += 0x6
+        print("", file=f)
+
+    def extract_buttons(self, out_dir):
+        button_indices = set()
+        for frame in self.frames:
+            for obj_type, index, x, y, depth, name in frame:
+                if obj_type == ObjectType.Button:
+                    button_indices.add(index)
+        with open(f"{out_dir}/button_actions.txt", "w") as f:
+            for button in button_indices:
+                self.decompile_button(button, f)
+
+    def run(self, out_dir):
+        Path(out_dir).mkdir(exist_ok=True)
         self.skip_thumbnail()
         self.find_header()
         self.process_header()
-        self.disassemble_actions()
-        self.extract_frames()
-        self.extract_movies()
-        self.decompile_actions()
-        self.extract_images()
-        self.extract_sounds()
+        self.disassemble_actions(out_dir)
+        self.extract_frames(out_dir)
+        self.extract_movies(out_dir)
+        self.decompile_actions(out_dir)
+        self.extract_buttons(out_dir)
+        self.extract_images(out_dir)
+        self.extract_sounds(out_dir)
 
 if __name__ == '__main__':
     with open(sys.argv[1], 'rb') as f:
-        Native32Reader(f).run()
+        Native32Reader(f).run(sys.argv[2])
