@@ -73,7 +73,7 @@ class Native32Reader:
         assert False, "Native32 header not found"
 
     def process_header(self):
-        self.generator = struct.unpack("<32s", self.data[self.idx+0x4:self.idx+0x24])[0].decode('utf-8')
+        self.generator = struct.unpack("<32s", self.data[self.idx+0x4:self.idx+0x24])[0].decode('utf-8').replace('\0', '')
         print()
         print(f"   Generator:        {self.generator}")
         self.idx += 0x60

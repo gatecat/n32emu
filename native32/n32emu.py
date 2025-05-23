@@ -14,7 +14,7 @@ class MovieState:
 
     _cloned_sprite: bool = False # this stops it being deleted when we load a new frame
     _visible: bool = True
-    _playing: bool = True
+    _playing: bool = False
     _next_frame: int|None = 0
 
 @dataclass
@@ -79,11 +79,6 @@ class N32Emu:
             self._next_frame = None
             self.load_frame(self.frame)
 
-
-        for obj in self.cur_frame:
-            if obj.obj_type == ObjectType.Action:
-                self.vm.run(obj.index, "")
-
         for movie_name, movie in self.movies.items():
             movie_frames = self.r.get_movie(movie.movie)
             if movie._next_frame is None and movie._playing and movie.frame < len(movie_frames) - 1:
@@ -98,6 +93,12 @@ class N32Emu:
                     # todo: sound
                     if movie_frames[movie.frame].action != 0:
                         self.vm.run(movie_frames[movie.frame].action, movie_name)
+
+
+        for obj in self.cur_frame:
+            if obj.obj_type == ObjectType.Action:
+                self.vm.run(obj.index, "")
+
         # Handle "buttons"
         keys = pygame.key.get_pressed()
         key_map = {
@@ -165,6 +166,8 @@ class N32Emu:
             return m.frame + 1
         elif prop == ActionProp.totalframes:
             return len(self.r.get_movie(m.movie))
+        elif prop == ActionProp.name:
+            return target
         else:
             assert False, (target, prop)
 
@@ -173,13 +176,16 @@ class N32Emu:
             return
         m = self.movies[target]
         if prop == ActionProp.x:
-            m.x = int(value)
+            m.x = int(float(value))
         elif prop == ActionProp.y:
-            m.y = int(value)
+            m.y = int(float(value))
         elif prop == ActionProp.visible:
-            m._visible = bool(int(value))
+            m._visible = bool(float(value))
         elif prop == ActionProp.currentframe:
-            m._next_frame = int(value)
+            m._next_frame = int(float(value))
+        elif prop == ActionProp.name:
+            self.movies[value] = m
+            del self.movies[target]
         else:
             assert False, (target, prop, value)
 

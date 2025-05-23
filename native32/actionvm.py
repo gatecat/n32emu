@@ -13,6 +13,7 @@ class ActionProp(IntEnum):
     visible = 7
     width = 8
     height = 9
+    name = 13
 
 def _str(x):
     if isinstance(x, float):
@@ -21,23 +22,28 @@ def _str(x):
         return str(x)
     return str(x)
 
+def _float(x):
+    if x == "":
+        return 0
+    return float(x)
+
 ops = {
     Action.Not: (1, lambda a: int(a) ^ 1),
-    Action.Add: (2, lambda a, b: float(a) + float(b)),
-    Action.Subtract: (2, lambda a, b: float(a) - float(b)),
-    Action.Multiply: (2, lambda a, b: float(a) * float(b)),
-    Action.Divide: (2, lambda a, b: float(a) / float(b)),
-    Action.Equals: (2, lambda a, b: int(float(a) == float(b))),
-    Action.Less: (2, lambda a, b: int(float(a) < float(b))),
+    Action.Add: (2, lambda a, b: _float(a) + _float(b)),
+    Action.Subtract: (2, lambda a, b: _float(a) - float(b)),
+    Action.Multiply: (2, lambda a, b: _float(a) * _float(b)),
+    Action.Divide: (2, lambda a, b: _float(a) / _float(b)),
+    Action.Equals: (2, lambda a, b: int(_float(a) == _float(b))),
+    Action.Less: (2, lambda a, b: int(_float(a) < _float(b))),
     Action.And: (2, lambda a, b: int(a) & int(b)),
     Action.Or: (2, lambda a, b: int(a) | int(b)),
     Action.StringEquals: (2, lambda a, b: int(a == b)),
     Action.StringAdd: (2, lambda a, b: a + b),
     Action.StringLess: (2, lambda a, b: a < b),
     Action.StringExtract: (3, lambda a, b, c: a[int(b)-1:int(b)-1+int(c)]),
-    Action.ToInteger: (1, lambda a: int(float(a))),
+    Action.ToInteger: (1, lambda a: int(_float(a))),
     Action.CharToAscii: (1, lambda a: ord(a)),
-    Action.AsciiToChar: (1, lambda a: chr(int(float(a)))),
+    Action.AsciiToChar: (1, lambda a: chr(int(_float(a)))),
     Action.StringLength: (1, lambda a: len(a)),
 }
 
@@ -60,7 +66,7 @@ class ActionVM:
                 print(f"  {var} = {val}")
                 self.vars[var.lower()] = val
             elif op == Action.GetVariable:
-                stack.append(self.vars[stack.pop().lower()])
+                stack.append(self.vars.get(stack.pop().lower(), ""))
             elif op in ops:
                 arg_count, func = ops[op]
                 args = [stack.pop() for i in range(arg_count)]
@@ -95,7 +101,7 @@ class ActionVM:
                 o3 = stack.pop()
                 o2 = stack.pop()
                 o1 = stack.pop()
-                self.emu.set_property(o1, ActionProp(int(o2)), float(o3))
+                self.emu.set_property(o1, ActionProp(int(o2)), o3)
             elif op == Action.GetProperty:
                 o2 = stack.pop()
                 o1 = stack.pop()
