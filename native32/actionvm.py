@@ -34,7 +34,7 @@ ops = {
     Action.StringEquals: (2, lambda a, b: int(a == b)),
     Action.StringAdd: (2, lambda a, b: a + b),
     Action.StringLess: (2, lambda a, b: a < b),
-    Action.StringExtract: (3, lambda a, b, c: a[b:int(b)+int(c)]),
+    Action.StringExtract: (3, lambda a, b, c: a[int(b)-1:int(b)-1+int(c)]),
     Action.ToInteger: (1, lambda a: int(float(a))),
     Action.CharToAscii: (1, lambda a: ord(a)),
     Action.AsciiToChar: (1, lambda a: chr(int(float(a)))),
@@ -57,9 +57,10 @@ class ActionVM:
             elif op == Action.SetVariable:
                 val = stack.pop()
                 var = stack.pop()
-                self.vars[var] = val
+                print(f"  {var} = {val}")
+                self.vars[var.lower()] = val
             elif op == Action.GetVariable:
-                stack.append(self.vars[stack.pop()])
+                stack.append(self.vars[stack.pop().lower()])
             elif op in ops:
                 arg_count, func = ops[op]
                 args = [stack.pop() for i in range(arg_count)]
@@ -83,7 +84,7 @@ class ActionVM:
             elif op == Action.PreviousFrame:
                 self.emu.goto_frame(target, self.emu.get_frame(target) - 1)
             elif op == Action.GotoFrame:
-                self.emu.goto_frame(target, int(payload))
+                self.emu.goto_frame(target, int(payload) + 1)
             elif op == Action.SetTarget:
                 target = payload
             elif op == Action.GotoFrame2:
@@ -98,12 +99,14 @@ class ActionVM:
             elif op == Action.GetProperty:
                 o2 = stack.pop()
                 o1 = stack.pop()
-                stack.append(_str(self.emu.get_property(o1, ActionProp(int(o2)))))
+                result = _str(self.emu.get_property(o1, ActionProp(int(o2))))
+                print(f"   GetProperty({o1}, {ActionProp(int(o2)).name}) -> {result}")
+                stack.append(result)
             elif op == Action.CloneSprite:
                 o3 = stack.pop()
                 o2 = stack.pop()
                 o1 = stack.pop()
-                self.emu.clone_sprite(o3, o2, int(o1))
+                self.emu.clone_sprite(o1, o2, int(o3))
             elif op == Action.RemoveSprite:
                 self.emu.remove_sprite(stack.pop())
             elif op == Action.Call:
@@ -112,6 +115,8 @@ class ActionVM:
                 break
             elif op == Action.RandomNumber:
                 stack.append(_str(self.rand.randrange(int(stack.pop()))))
+            elif op == Action.GetTime:
+                stack.append(_str(self.emu.get_time()))
             else:
                 assert False, (pc, op, payload)
             pc = npc
