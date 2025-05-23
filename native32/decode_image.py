@@ -48,3 +48,12 @@ def decode_image(data):
     # assert pixel == (width//2) * (height//2)
     return image.frombytes(bytes(out), (width, height), "RGBA")
 
+def main():
+    import sys
+    with open(sys.argv[1], 'rb') as f:
+        header = f.read(0x2000)
+        decoded = decode_image(header[12:])
+        image.save(decoded, sys.argv[2])
+
+if __name__ == '__main__':
+    main()
