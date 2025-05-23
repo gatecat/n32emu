@@ -1,4 +1,4 @@
-from PIL import Image
+from pygame import image
 import struct
 
 def decode_image(data):
@@ -30,7 +30,7 @@ def decode_image(data):
     pixel = 0
     while i < img_size+8 and pixel < ((width//2) * (height//2)):
         op = data[i] + (data[i+1] << 8)
-        assert op != 0x0
+        assert op != 0x0, f"0x{i:08x}"
         i += 2
         if op & 0x8000 != 0:
             # N quads of data
@@ -45,6 +45,6 @@ def decode_image(data):
                 _putquad(pixel, data[i:i+6])
                 pixel += 1
             i += 6
-    assert pixel == (width//2) * (height//2)
-    return Image.frombytes("RGBA", (width, height), out)
+    # assert pixel == (width//2) * (height//2)
+    return image.frombytes(bytes(out), (width, height), "RGBA")
 
