@@ -1,5 +1,6 @@
 from actions import Action
 from enum import IntEnum
+from random import Random
 
 class ActionProp(IntEnum):
     x = 0
@@ -13,6 +14,12 @@ class ActionProp(IntEnum):
     width = 8
     height = 9
 
+def _str(x):
+    if isinstance(x, float):
+        if x == int(x):
+            return str(int(x))
+        return str(x)
+    return str(x)
 
 ops = {
     Action.Not: (1, lambda a: int(a) ^ 1),
@@ -24,7 +31,7 @@ ops = {
     Action.Less: (2, lambda a, b: int(float(a) < float(b))),
     Action.And: (2, lambda a, b: int(a) & int(b)),
     Action.Or: (2, lambda a, b: int(a) | int(b)),
-    Action.StringEquals: (2, lambda a, b: a == b),
+    Action.StringEquals: (2, lambda a, b: int(a == b)),
     Action.StringAdd: (2, lambda a, b: a + b),
     Action.StringLess: (2, lambda a, b: a < b),
     Action.StringExtract: (3, lambda a, b, c: a[b:int(b)+int(c)]),
@@ -38,6 +45,7 @@ class ActionVM:
     def __init__(self, emu):
         self.emu = emu
         self.vars = {}
+        self.rand = Random(0)
     def run(self, index, target=""):
         pc = index
         stack = []
@@ -55,7 +63,7 @@ class ActionVM:
             elif op in ops:
                 arg_count, func = ops[op]
                 args = [stack.pop() for i in range(arg_count)]
-                stack.append(str(func(*reversed(args))))
+                stack.append(_str(func(*reversed(args))))
             elif op == Action.Jump:
                 npc = pc+payload+1 if payload >= 0 else pc+payload
             elif op == Action.If:
@@ -86,17 +94,24 @@ class ActionVM:
                 o3 = stack.pop()
                 o2 = stack.pop()
                 o1 = stack.pop()
-                self.emu.set_property(o1, ActionProp(int(o2)), o3)
+                self.emu.set_property(o1, ActionProp(int(o2)), float(o3))
             elif op == Action.GetProperty:
                 o2 = stack.pop()
                 o1 = stack.pop()
-                stack.append(str(emu.get_property(o1, ActionProp(int(o2)))))
+                stack.append(_str(self.emu.get_property(o1, ActionProp(int(o2)))))
+            elif op == Action.CloneSprite:
+                o3 = stack.pop()
+                o2 = stack.pop()
+                o1 = stack.pop()
+                self.emu.clone_sprite(o3, o2, int(o1))
             elif op == Action.RemoveSprite:
                 self.emu.remove_sprite(stack.pop())
             elif op == Action.Call:
                 self.emu.call(int(stack.pop()))
             elif op == Action.End:
                 break
+            elif op == Action.RandomNumber:
+                stack.append(_str(self.rand.randrange(int(stack.pop()))))
             else:
                 assert False, (pc, op, payload)
             pc = npc

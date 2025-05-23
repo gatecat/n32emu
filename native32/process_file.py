@@ -49,6 +49,7 @@ class Native32Reader:
         self._images_cache = {}
         self._frames_cache = {}
         self._movies_cache = {}
+        self._button_events_cache = {}
 
     def skip_thumbnail(self):
         if self.data[self.idx:self.idx+4] == b'SWFT':
@@ -333,6 +334,23 @@ class Native32Reader:
             i += act_len # what is this really??
             ptr += 0x6
         print("", file=f)
+
+    def get_button_events(self, button):
+        if button not in self._button_events_cache:
+            cond_table_idx = self.base + self.button_cond_idx + (button - 1) * 4
+            ptr, = struct.unpack("<L", self.data[cond_table_idx:cond_table_idx+4])
+            ptr += self.base
+            total_act_len, = struct.unpack("<H", self.data[ptr:ptr+2])
+            ptr += 2
+            i = 0
+            events = []
+            while i < total_act_len:
+                keycode, act_len, event = struct.unpack("<HHH", self.data[ptr:ptr+6])
+                events.append((keycode, event))
+                i += act_len
+                ptr += 0x6
+            self._button_events_cache[button] = events
+        return self._button_events_cache[button]
 
     def extract_buttons(self, out_dir):
         button_indices = set()

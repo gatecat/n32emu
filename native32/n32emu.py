@@ -77,18 +77,41 @@ class N32Emu:
                 # todo: not if sound playing
                 movie._next_frame = movie.frame + 1
             if movie._next_frame is not None:
-                movie.frame = movie._next_frame
-                movie._next_frame = None
-                # todo: sound
-                if movie_frames[movie.frame].action != 0:
-                    self.vm.run(movie_frames[movie.frame].action, movie_name)
+                if movie._next_frame == -1:
+                    movie._next_frame = 0
+                if movie._next_frame < len(movie_frames) - 1:
+                    movie.frame = movie._next_frame
+                    movie._next_frame = None
+                    # todo: sound
+                    if movie_frames[movie.frame].action != 0:
+                        self.vm.run(movie_frames[movie.frame].action, movie_name)
+
+        # Handle "buttons"
+        keys = pygame.key.get_pressed()
+        key_map = {
+            0x0200: pygame.K_LEFT,
+            0x0400: pygame.K_RIGHT,
+            0x1c00: pygame.K_UP,
+            0x1e00: pygame.K_DOWN,
+            0x4000: pygame.K_z,
+            0x8800: pygame.K_x,
+        }
+        for obj in self.cur_frame:
+            if obj.obj_type == ObjectType.Button:
+                events = self.r.get_button_events(obj.index)
+                for keycode, action in events:
+                    if keycode in key_map and keys[key_map[keycode]]:
+                        self.vm.run(action, "")
+
     def stop(self, target):
+        print(f"   stop({target})")
         if target == "":
             self._playing = False
         else:
             self.movies[target]._playing = False
 
     def play(self, target):
+        print(f"   play({target})")
         if target == "":
             self._playing = True
         else:
@@ -98,13 +121,14 @@ class N32Emu:
         if target == "":
             return self.frame
         else:
-            return self.movies[target].frame
+            return self.movies[target].frame + 1
 
     def goto_frame(self, target, frame):
+        print(f"   goto_frame({target}, {frame})")
         if target == "":
             self._next_frame = frame
         else:
-            self.movies[target]._next_frame = frame
+            self.movies[target]._next_frame = frame - 1
 
     def stop_sounds(self, target):
         pass
@@ -143,6 +167,13 @@ class N32Emu:
         else:
             assert False, (target, prop, value)
 
+    def clone_sprite(src, dest, depth):
+        orig = self.movies[src]
+        self.movies[dest] = MovieState(movie=orig.movie, x=orig.x, y=orig.y, depth=depth,
+            frame=orig.frame, _visible=orig._visible, _playing=orig._playing)
+    def remove_sprite(name):
+        del self.movies[name]
+
     def run(self):
         pygame.init()
         screen = pygame.display.set_mode((320, 240), flags=pygame.SCALED)
@@ -150,11 +181,11 @@ class N32Emu:
 
         running = True
         while running:
-
-            self.tick()
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+
+            self.tick()
 
             screen.fill("black")
             self.draw_frame(screen)
