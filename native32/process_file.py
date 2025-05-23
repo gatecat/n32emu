@@ -10,6 +10,8 @@ from dataclasses import dataclass
 
 from enum import IntEnum, Enum
 
+__all__ = ["ObjectType", "FrameObject", "MovieFrame", "AudioFormat", "Native32Reader"]
+
 class ObjectType(IntEnum):
     Image = 1
     Movie = 2
@@ -243,7 +245,7 @@ class Native32Reader:
                     if fr.action != 0:
                         decompile(f, self.actions, fr.action, f"movie{i}_act{fr.action}")
 
-    def extract_movie(self, movie):
+    def get_movie(self, movie):
         if movie not in self._movies_cache:
             idx_ptr = self.base + self.movie_idx + (4 * (movie - 1))
             ptr, = struct.unpack("<L", self.data[idx_ptr:idx_ptr+4])
@@ -267,7 +269,7 @@ class Native32Reader:
         with open(f"{out_dir}/movies.txt", "w") as f:
             for i in sorted(movie_indices):
                 print(f"Movie {i}: ", file=f)
-                movie_frames = self.extract_movie(i)
+                movie_frames = self.get_movie(i)
                 for fr in movie_frames:
                     print(f"    {fr.image:5} X={fr.x:3} Y={fr.y:3} {fr.action:5} {fr.sound:5} {fr.u3:5}", file=f)
                 print("", file=f)
@@ -341,6 +343,11 @@ class Native32Reader:
         with open(f"{out_dir}/button_actions.txt", "w") as f:
             for button in button_indices:
                 self.decompile_button(button, f)
+
+    def init(self):
+        self.skip_thumbnail()
+        self.find_header()
+        self.process_header()
 
     def run(self, out_dir):
         Path(out_dir).mkdir(exist_ok=True)
