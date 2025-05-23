@@ -27,23 +27,26 @@ def _float(x):
         return 0
     return float(x)
 
+def _int(x):
+    return int(_float(x))
+
 ops = {
-    Action.Not: (1, lambda a: int(a) ^ 1),
+    Action.Not: (1, lambda a: _int(a) ^ 1),
     Action.Add: (2, lambda a, b: _float(a) + _float(b)),
     Action.Subtract: (2, lambda a, b: _float(a) - float(b)),
     Action.Multiply: (2, lambda a, b: _float(a) * _float(b)),
     Action.Divide: (2, lambda a, b: _float(a) / _float(b)),
     Action.Equals: (2, lambda a, b: int(_float(a) == _float(b))),
     Action.Less: (2, lambda a, b: int(_float(a) < _float(b))),
-    Action.And: (2, lambda a, b: int(a) & int(b)),
-    Action.Or: (2, lambda a, b: int(a) | int(b)),
-    Action.StringEquals: (2, lambda a, b: int(a == b)),
+    Action.And: (2, lambda a, b: _int(a) & _int(b)),
+    Action.Or: (2, lambda a, b: _int(a) | _int(b)),
+    Action.StringEquals: (2, lambda a, b: _int(a == b)),
     Action.StringAdd: (2, lambda a, b: a + b),
     Action.StringLess: (2, lambda a, b: a < b),
     Action.StringExtract: (3, lambda a, b, c: a[int(b)-1:int(b)-1+int(c)]),
-    Action.ToInteger: (1, lambda a: int(_float(a))),
+    Action.ToInteger: (1, lambda a: _int(a)),
     Action.CharToAscii: (1, lambda a: ord(a)),
-    Action.AsciiToChar: (1, lambda a: chr(int(_float(a)))),
+    Action.AsciiToChar: (1, lambda a: chr(_int(a))),
     Action.StringLength: (1, lambda a: len(a)),
 }
 
@@ -94,13 +97,14 @@ class ActionVM:
             elif op == Action.SetTarget:
                 target = payload
             elif op == Action.GotoFrame2:
-                self.emu.goto_frame(target, int(stack.pop()))
+                self.emu.goto_frame(target, int(float(stack.pop())))
             elif op == Action.SetTarget2:
                 target = stack.pop()
             elif op == Action.SetProperty:
                 o3 = stack.pop()
                 o2 = stack.pop()
                 o1 = stack.pop()
+                print(f"   SetProperty({o1}, {ActionProp(int(o2)).name}, {o3})")
                 self.emu.set_property(o1, ActionProp(int(o2)), o3)
             elif op == Action.GetProperty:
                 o2 = stack.pop()

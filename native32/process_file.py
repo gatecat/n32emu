@@ -49,6 +49,7 @@ class Native32Reader:
         self._images_cache = {}
         self._frames_cache = {}
         self._movies_cache = {}
+        self._sound_cache = {}
         self._button_events_cache = {}
 
     def skip_thumbnail(self):
@@ -208,7 +209,7 @@ class Native32Reader:
                 return None
             i = self.base + offset
             while i < len(self.data) - 0x10:
-                obj_type, index, x, y, depth, resv, name = struct.unpack("<HHHHHHL", self.data[i:i+0x10])
+                obj_type, index, x, y, depth, resv, name = struct.unpack("<HHhhHHL", self.data[i:i+0x10])
                 if obj_type == 0x0000 or obj_type == 0xFFFF:
                     break
                 obj_type = ObjectType(obj_type)
@@ -275,24 +276,29 @@ class Native32Reader:
                     print(f"    {fr.image:5} X={fr.x:3} Y={fr.y:3} {fr.action:5} {fr.sound:5} {fr.u3:5}", file=f)
                 print("", file=f)
 
-    def extract_sound(self, idx):
-        table_idx = self.sound_table + (idx - 1) * 4
-        ptr, = struct.unpack("<L", self.data[table_idx:table_idx+4])
-        flags = ptr & 0xF0000000
-        addr = ptr & 0x0FFFFFFF
-        if flags == 0xF0000000: # MP3 audio
-            # MP3 format
-            begin = self.base + self.mp3_offset + addr
-            size, unk = struct.unpack("<LH", self.data[begin:begin+6])
-            begin += 6
-            return (AudioFormat.MP3, self.data[begin:begin+size])
-            
-        elif flags == 0x00000000: # raw samples
-            # 22050Hz?, 16-bit, big endian, mono?
-            begin = self.base + addr
-            size, = struct.unpack("<L", self.data[begin:begin+4])
-            begin += 4
-            return (AudioFormat.RAW, self.data[begin:begin+size])
+    def _endian_swap(self, data):
+        return bytes(data[i ^ 1] for i in range(len(data) & 0xFFFFFFFE))
+
+    def get_sound(self, idx):
+        if idx not in self._sound_cache:
+            table_idx = self.sound_table + (idx - 1) * 4
+            ptr, = struct.unpack("<L", self.data[table_idx:table_idx+4])
+            flags = ptr & 0xF0000000
+            addr = ptr & 0x0FFFFFFF
+            if flags == 0xF0000000: # MP3 audio
+                # MP3 format
+                begin = self.base + self.mp3_offset + addr
+                size, unk = struct.unpack("<LH", self.data[begin:begin+6])
+                begin += 6
+                self._sound_cache[idx] = (AudioFormat.MP3, bytes(self.data[begin:begin+size]))
+                
+            elif flags == 0x00000000: # raw samples
+                # 22050Hz?, 16-bit, big endian, mono?
+                begin = self.base + addr
+                size, = struct.unpack("<L", self.data[begin:begin+4])
+                begin += 4
+                self._sound_cache[idx] = (AudioFormat.RAW, self._endian_swap(self.data[begin:begin+size]))
+        return self._sound_cache[idx]
 
     def _save_sound(self, sound, idx, out_dir):
         form, audio_data = sound
@@ -311,7 +317,7 @@ class Native32Reader:
                 if frame.sound != 0:
                     sound_indices.add(frame.sound & 0xFF)
         for sound in sorted(sound_indices):
-            self._save_sound(self.extract_sound(sound), sound, out_dir)
+            self._save_sound(self.get_sound(sound), sound, out_dir)
 
     def decompile_button(self, button, f):
         print(f"# Button {button}", file=f)

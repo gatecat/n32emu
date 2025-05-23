@@ -1,4 +1,4 @@
-import sys
+import sys, io
 import pygame
 from process_file import *
 from dataclasses import dataclass
@@ -12,6 +12,7 @@ class MovieState:
     depth: int
     frame: int = 0
 
+    _sound_channel: int|None = None
     _cloned_sprite: bool = False # this stops it being deleted when we load a new frame
     _visible: bool = True
     _playing: bool = False
@@ -71,6 +72,32 @@ class N32Emu:
             img = self.r.get_image(d.image)
             screen.blit(img, (d.x, d.y))
 
+    def play_sound(self, sound, movie):
+        repeat = (sound >> 8) & 0xFF
+        if repeat == 0xFF:
+            repeat = -1
+        index = sound & 0xFF
+        fmt, data = self.r.get_sound(index)
+        if fmt == AudioFormat.MP3:
+            channel = len(self.channel_movie) - 1
+            self.stop_channel(channel)
+
+            pygame.mixer.music.unload()
+            pygame.mixer.music.load(io.BytesIO(data), "mp3")
+            pygame.mixer.music.play(loops=repeat)
+
+            self.channel_movie[channel] = movie
+            return channel
+
+        elif fmt == AudioFormat.RAW:
+            for i in range(len(self.channel_movie) - 1):
+                if self.channel_movie[i] is None: # find a free channel
+                    pygame.mixer.Channel(i).play(pygame.mixer.Sound(buffer=data))
+                    self.channel_movie[i] = movie
+                    return i
+
+        return None
+
     def tick(self):
         if self._next_frame is None and self._playing:
             self._next_frame = self.frame + 1
@@ -79,25 +106,28 @@ class N32Emu:
             self._next_frame = None
             self.load_frame(self.frame)
 
+
+        for obj in self.cur_frame:
+            if obj.obj_type == ObjectType.Action:
+                self.vm.run(obj.index, "")
+
         for movie_name, movie in self.movies.items():
             movie_frames = self.r.get_movie(movie.movie)
-            if movie._next_frame is None and movie._playing and movie.frame < len(movie_frames) - 1:
+            if movie._next_frame is None and movie._playing and movie.frame < len(movie_frames) - 1 and movie._sound_channel is None:
                 # todo: not if sound playing
                 movie._next_frame = movie.frame + 1
             if movie._next_frame is not None:
+                if movie._sound_channel is not None:
+                    self.stop_channel(movie._sound_channel)
                 if movie._next_frame == -1:
                     movie._next_frame = 0
                 if movie._next_frame < len(movie_frames):
                     movie.frame = movie._next_frame
                     movie._next_frame = None
-                    # todo: sound
+                    if movie_frames[movie.frame].sound != 0:
+                        movie._sound_channel = self.play_sound(movie_frames[movie.frame].sound, movie_name)
                     if movie_frames[movie.frame].action != 0:
                         self.vm.run(movie_frames[movie.frame].action, movie_name)
-
-
-        for obj in self.cur_frame:
-            if obj.obj_type == ObjectType.Action:
-                self.vm.run(obj.index, "")
 
         # Handle "buttons"
         keys = pygame.key.get_pressed()
@@ -115,6 +145,18 @@ class N32Emu:
                 for keycode, action in events:
                     if keycode in key_map and keys[key_map[keycode]]:
                         self.vm.run(action, "")
+
+        # Handle ended sounds
+        for i, movie in enumerate(self.channel_movie):
+            if i == len(self.channel_movie) - 1:
+                if pygame.mixer.music.get_busy():
+                    continue
+            else:
+                if pygame.mixer.Channel(i).get_busy():
+                    continue
+            if movie is not None:
+                self.movies[movie]._sound_channel = None
+                self.channel_movie[i] = None
 
     def stop(self, target):
         print(f"   stop({target})")
@@ -143,8 +185,24 @@ class N32Emu:
         else:
             self.movies[target]._next_frame = frame - 1
 
+    def stop_channel(self, i):
+        if i == len(self.channel_movie) - 1:
+            pygame.mixer.music.stop()
+        else:
+            pygame.mixer.Channel(i).stop()
+        movie = self.channel_movie[i]
+        if movie is not None:
+            self.movies[movie]._sound_channel = None
+        self.channel_movie[i] = None
+
     def stop_sounds(self, target):
-        pass
+        if target == "":
+            for i, movie in enumerate(self.channel_movie):
+                self.stop_channel(i)
+        elif target in movies:
+            channel = self.movies[target]._sound_channel
+            if channel is not None:
+                self.stop_channel(channel)
 
     def call(self, target):
         frame = self.r.get_frame(target)
@@ -163,6 +221,8 @@ class N32Emu:
         elif prop == ActionProp.visible:
             return int(m._visible)
         elif prop == ActionProp.currentframe:
+            if m._next_frame is None and m._playing:
+                return m.frame + 2
             return m.frame + 1
         elif prop == ActionProp.totalframes:
             return len(self.r.get_movie(m.movie))
@@ -196,17 +256,24 @@ class N32Emu:
             _cloned_sprite=True)
     def remove_sprite(self, name):
         if name in self.movies:
+            if self.movies[name]._sound_channel is not None:
+                self.stop_channel(self.movies[name]._sound_channel)
             del self.movies[name]
 
     def get_time(self):
         return self.time
 
     def run(self):
+        pygame.mixer.pre_init(22050, -16, 1)
         pygame.init()
         pygame.display.set_caption("n32emu")
         screen = pygame.display.set_mode((320, 240), flags=pygame.SCALED)
         clock = pygame.time.Clock()
         self.time = 0
+        self.ticks = 0
+
+        pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512, allowedchanges=0)
+        self.channel_movie = [None for i in range(pygame.mixer.get_num_channels() + 1)]
 
         running = True
         while running:
