@@ -115,9 +115,12 @@ class N32Emu:
 
         for movie_name, movie in self.movies.items():
             movie_frames = self.r.get_movie(movie.movie)
-            if movie._next_frame is None and movie._playing and movie.frame < len(movie_frames) - 1 and movie._sound_channel is None:
+            if movie._next_frame is None and movie._playing and self.ticks % 2 == 0 and movie._sound_channel is None:
                 # todo: not if sound playing
-                movie._next_frame = movie.frame + 1
+                if movie.frame < len(movie_frames) - 1:
+                    movie._next_frame = movie.frame + 1
+                else:
+                    movie._next_frame = 0
             if movie._next_frame is not None:
                 if movie._sound_channel is not None:
                     self.stop_channel(movie._sound_channel)
@@ -184,8 +187,10 @@ class N32Emu:
         print(f"   goto_frame({target}, {frame})")
         if target == "":
             self._next_frame = frame
+            self._playing = False
         else:
             self.movies[target]._next_frame = frame - 1
+            self.movies[target]._playing = False
 
     def stop_channel(self, i):
         if i == len(self.channel_movie) - 1:
