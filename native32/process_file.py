@@ -2,7 +2,7 @@ import sys, struct
 from pathlib import Path
 
 from decrypt_header import decrypt_header
-from decode_image import decode_image
+from decode_image import decode_image_argb, decode_image_yuv
 from actions import Action
 from decompile import decompile
 
@@ -178,7 +178,10 @@ class Native32Reader:
             if img_offset == 0xFFFFFFFF:
                 self._images_cache[index] = None
             img_width, img_height, img_size = struct.unpack("<HHL", self.data[self.base+img_offset:self.base+img_offset+8])
-            self._images_cache[index] = decode_image(self.data[self.base+img_offset:self.base+img_offset+img_size+8], yuv_dump=yuv_dump)
+            if self.colorspace == "ARGB":
+                self._images_cache[index] = decode_image_argb(self.data[self.base+img_offset:self.base+img_offset+img_size+8])
+            else:
+                self._images_cache[index] = decode_image_yuv(self.data[self.base+img_offset:self.base+img_offset+img_size+8], yuv_dump=yuv_dump)
         return self._images_cache[index]
 
     def extract_images(self, out_dir):
@@ -195,8 +198,11 @@ class Native32Reader:
             img_width, img_height, img_size = struct.unpack("<HHL", self.data[self.base+img_offset:self.base+img_offset+8])
             with open(f"{out_dir}/images/{index}.bin", "wb") as f:
                 f.write(self.data[self.base+img_offset:self.base+img_offset+img_size+8]) # +8 to include header
-            with open(f"{out_dir}/images/{index}.yuv", "wb") as f:
-                img = self.get_image(index, yuv_dump=f)
+            if self.colorspace == "ARGB":
+                img = self.get_image(index)
+            else:
+                with open(f"{out_dir}/images/{index}.yuv", "wb") as f:
+                    img = self.get_image(index, yuv_dump=f)
             image.save(img, f"{out_dir}/images/{index}.png")
             index += 1
             i += 4
@@ -281,6 +287,9 @@ class Native32Reader:
     def _endian_swap_resample(self, data):
         return bytes(data[(2 * (i // 4)) | ((i & 0x1) ^ 0x1)] for i in range(2 * (len(data) & 0xFFFFFFFE)))
 
+    def _resample(self, data):
+        return bytes(data[(2 * (i // 4)) | (i & 0x1)] for i in range(2 * (len(data) & 0xFFFFFFFE)))
+
     def get_sound(self, idx):
         if idx not in self._sound_cache:
             table_idx = self.sound_table + (idx - 1) * 4
@@ -299,7 +308,10 @@ class Native32Reader:
                 begin = self.base + addr
                 size, = struct.unpack("<L", self.data[begin:begin+4])
                 begin += 4
-                self._sound_cache[idx] = (AudioFormat.RAW, self._endian_swap_resample(self.data[begin:begin+size]))
+                if self.colorspace == "ARGB":
+                    self._sound_cache[idx] = (AudioFormat.RAW, self._resample(self.data[begin:begin+size]))
+                else:
+                    self._sound_cache[idx] = (AudioFormat.RAW, self._endian_swap_resample(self.data[begin:begin+size]))
         return self._sound_cache[idx]
 
     def _save_sound(self, sound, idx, out_dir):

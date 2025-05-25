@@ -1,7 +1,7 @@
 from pygame import image
 import struct
 
-def decode_image(data, yuv_dump=None):
+def decode_image_yuv(data, yuv_dump=None):
     width, height, img_size = struct.unpack("<HHL", data[0:8])
     out = bytearray(width * height * 4)
     if yuv_dump is not None:
@@ -57,11 +57,51 @@ def decode_image(data, yuv_dump=None):
     # assert pixel == (width//2) * (height//2)
     return image.frombytes(bytes(out), (width, height), "RGBA")
 
+def decode_image_argb(data):
+    width, height, img_size = struct.unpack("<HHL", data[0:8])
+    out = bytearray(width * height * 4)
+
+    pixel = 0
+    i = 8
+
+    def _putpixel(pix, value):
+        y = pix // width
+        x = pix % width
+        if value & 0x8000 == 0x0:
+            out[(y * width + x) * 4 + 3] = 0
+            out[(y * width + x) * 4 + 2] = 0
+            out[(y * width + x) * 4 + 1] = 0
+            out[(y * width + x) * 4 + 0] = 0
+        else:
+            out[(y * width + x) * 4 + 3] = 255
+            out[(y * width + x) * 4 + 2] = ((value >> 0) & 0x1F) << 3 # R
+            out[(y * width + x) * 4 + 1] = ((value >> 5) & 0x1F) << 3 # G
+            out[(y * width + x) * 4 + 0] = ((value >> 10) & 0x1F) << 3 # B
+
+    while i < img_size+8 and pixel < (width * height):
+        op = data[i] | (data[i+1] << 8)
+        if op == 0x0:
+            # literal 0
+            _putpixel(pixel, 0)
+            pixel += 1
+            i += 2
+        elif op & 0xc000 == 0xc000:
+            # repeat N times
+            value = data[i + 2] | (data[i + 3] << 8)
+            for j in range(op & 0x3fff):
+                _putpixel(pixel, value)
+                pixel += 1
+            i += 4
+        else:
+            assert False, f"0x{op:04x} at 0x{i:06x}"
+
+    return image.frombytes(bytes(out), (width, height), "RGBA")
+
 def main():
     import sys
     with open(sys.argv[1], 'rb') as f:
         header = f.read(0x2000)
-        decoded = decode_image(header[12:])
+        decoded = decode_image_yuv(header[12:])
         image.save(decoded, sys.argv[2])
 
 if __name__ == '__main__':
