@@ -98,7 +98,8 @@ class Native32Reader:
         self.idx += 0x20
 
         print()
-        self.frame_idx, self.image_idx, self.action_idx, self.movie_idx, self.button_idx, self.button_cond_idx = struct.unpack("<LLLLLL", decrypted[0x8:])
+        self.unkh, self.magic, self.frame_idx, self.image_idx, self.action_idx, self.movie_idx, self.button_idx, self.button_cond_idx = struct.unpack("<LLLLLLLL", decrypted[0x0:])
+        print(f"  Unknown value:     0x{self.unkh:08x}")
         print(f"  Frame table:       0x{self.frame_idx:08x}")
         print(f"  Image table:       0x{self.image_idx:08x}")
         print(f"  Action table:      0x{self.action_idx:08x}")
@@ -213,6 +214,7 @@ class Native32Reader:
                 if obj_type == 0x0000 or obj_type == 0xFFFF:
                     break
                 obj_type = ObjectType(obj_type)
+                assert resv == 0, (frame, obj_type, index, x, y, depth, resv, name)
                 if name != 0x0000:
                     name = self._get_str(self.base + name)
                 else:
@@ -276,8 +278,8 @@ class Native32Reader:
                     print(f"    {fr.image:5} X={fr.x:3} Y={fr.y:3} {fr.action:5} {fr.sound:5} {fr.u3:5}", file=f)
                 print("", file=f)
 
-    def _endian_swap(self, data):
-        return bytes(data[i ^ 1] for i in range(len(data) & 0xFFFFFFFE))
+    def _endian_swap_resample(self, data):
+        return bytes(data[(2 * (i // 4)) | ((i & 0x1) ^ 0x1)] for i in range(2 * (len(data) & 0xFFFFFFFE)))
 
     def get_sound(self, idx):
         if idx not in self._sound_cache:
@@ -293,11 +295,11 @@ class Native32Reader:
                 self._sound_cache[idx] = (AudioFormat.MP3, bytes(self.data[begin:begin+size]))
                 
             elif flags == 0x00000000: # raw samples
-                # 22050Hz?, 16-bit, big endian, mono?
+                # 11025Hz?, 16-bit, big endian, mono?
                 begin = self.base + addr
                 size, = struct.unpack("<L", self.data[begin:begin+4])
                 begin += 4
-                self._sound_cache[idx] = (AudioFormat.RAW, self._endian_swap(self.data[begin:begin+size]))
+                self._sound_cache[idx] = (AudioFormat.RAW, self._endian_swap_resample(self.data[begin:begin+size]))
         return self._sound_cache[idx]
 
     def _save_sound(self, sound, idx, out_dir):

@@ -25,21 +25,24 @@ def _str(x):
 def _float(x):
     if x == "":
         return 0
-    return float(x)
+    try:
+        return float(x)
+    except ValueError:
+        return 0
 
 def _int(x):
     return int(_float(x))
 
 ops = {
-    Action.Not: (1, lambda a: _int(a) ^ 1),
+    Action.Not: (1, lambda a: int(not _int(a))),
     Action.Add: (2, lambda a, b: _float(a) + _float(b)),
     Action.Subtract: (2, lambda a, b: _float(a) - float(b)),
     Action.Multiply: (2, lambda a, b: _float(a) * _float(b)),
     Action.Divide: (2, lambda a, b: _float(a) / _float(b)),
     Action.Equals: (2, lambda a, b: int(_float(a) == _float(b))),
     Action.Less: (2, lambda a, b: int(_float(a) < _float(b))),
-    Action.And: (2, lambda a, b: _int(a) & _int(b)),
-    Action.Or: (2, lambda a, b: _int(a) | _int(b)),
+    Action.And: (2, lambda a, b: int(_int(a) and _int(b))),
+    Action.Or: (2, lambda a, b: int(_int(a) or _int(b))),
     Action.StringEquals: (2, lambda a, b: _int(a == b)),
     Action.StringAdd: (2, lambda a, b: a + b),
     Action.StringLess: (2, lambda a, b: a < b),

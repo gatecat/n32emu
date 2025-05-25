@@ -99,6 +99,8 @@ class N32Emu:
         return None
 
     def tick(self):
+        self.ticks += 1
+
         if self._next_frame is None and self._playing:
             self._next_frame = self.frame + 1
         if self._next_frame is not None:
@@ -252,7 +254,7 @@ class N32Emu:
     def clone_sprite(self, src, dest, depth):
         orig = self.movies[src]
         self.movies[dest] = MovieState(movie=orig.movie, x=orig.x, y=orig.y, depth=depth,
-            frame=-1, _visible=orig._visible, _playing=orig._playing, _next_frame=orig.frame,
+            frame=-1, _visible=True, _playing=orig._playing, _next_frame=orig.frame,
             _cloned_sprite=True)
     def remove_sprite(self, name):
         if name in self.movies:
