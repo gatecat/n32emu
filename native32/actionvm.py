@@ -130,6 +130,10 @@ class ActionVM:
                 stack.append(_str(self.rand.randrange(int(stack.pop()))))
             elif op == Action.GetTime:
                 stack.append(_str(self.emu.get_time()))
+            elif op == Action.GetUrl2:
+                o2 = stack.pop()
+                o1 = stack.pop()
+                self.emu.get_url(o1, o2)
             else:
                 assert False, (pc, op, payload)
             pc = npc

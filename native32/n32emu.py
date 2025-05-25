@@ -3,6 +3,7 @@ import pygame
 from process_file import *
 from dataclasses import dataclass
 from actionvm import ActionVM, ActionProp
+from pathlib import Path
 
 @dataclass
 class MovieState:
@@ -27,6 +28,7 @@ class DrawEntry:
 
 class N32Emu:
     def __init__(self, filename):
+        self.filename = filename
         with open(filename, "rb") as f:
             self.r = Native32Reader(f)
         self.r.init()
@@ -34,6 +36,7 @@ class N32Emu:
         self._playing = True
         self._next_frame = 1
         self.frame = 0
+        self.reload = None
         self.vm = ActionVM(self)
 
     def load_frame(self, i):
@@ -270,6 +273,68 @@ class N32Emu:
     def get_time(self):
         return self.time
 
+    def format_filename(self, filename):
+        parts = [x.strip() for x in filename.split("/") if x != ""]
+        return Path(*parts)
+
+    def load_content(self, filename):
+        filename = self.format_filename(filename)
+        fullpath = None
+        for parent in Path(self.filename).parents:
+            # Use glob here for case insensitive matching, even on Linux
+            glob_result = list(parent.glob(filename, case_sensitive=False))
+            if len(glob_result) == 1:
+                fullpath = (parent / glob_result[0])
+                break
+        if fullpath is None:
+            print(f"Failed to find file {filename}")
+            return
+        print(f"Loading {fullpath}...")
+        self.stop_sounds("")
+        self.time = 0
+        self.ticks = 0
+        with open(fullpath, "rb") as f:
+            self.r = Native32Reader(f)
+        self.r.init()
+        self.movies = {}
+        self._playing = True
+        self._next_frame = 1
+        self.frame = 0
+        self.reload = None
+        self.vm = ActionVM(self)
+
+    def load_data(self, data_var, success_var):
+        if not Path(f"{self.filename}.ssl_sav").is_file():
+            self.vm.vars[success_var.lower()] = "N"
+            return
+        with open(f"{self.filename}.ssl_sav", "r") as f:
+            self.vm.vars[data_var.lower()] = f.read()
+            self.vm.vars[success_var.lower()] = "S"
+
+    def save_data(self, data, success_var):
+        with open(f"{self.filename}.ssl_sav", "w") as f:
+            f.write(data)
+            self.vm.vars[success_var.lower()] = "S"
+
+    def get_url(self, url, target):
+        target = target.split("+")
+        if target[1] == "SSL_PlayNext":
+            print(f"SSL_PlayNext({url}, {target})")
+            url = url.split("+")
+            for skipped in url[:-1]: # intro movie, etc
+                print(f"Ignoring SSL_PlayNext pre-content {skipped}")
+            self.reload = url[-1]
+        elif target[1] == "SSL_PlayPlan":
+            print(f"Ignoring SSL_PlayPlan('{url}')")
+        elif target[1] == "SSL_GetSSLData":
+            print("SSL_GetSSLData")
+            self.load_data(url, target[2])
+        elif target[1] == "SSL_SaveSSLData":
+            print("SSL_SaveSSLData")
+            self.save_data(url, target[2])
+        else:
+            assert False, f"Unhandled GetUrl2('{url}', '{target}')"
+
     def run(self):
         pygame.mixer.pre_init(22050, -16, 1)
         pygame.init()
@@ -297,6 +362,9 @@ class N32Emu:
 
             clock.tick(30)
             self.time += 1000//30
+
+            if self.reload is not None:
+                self.load_content(self.reload)
 
         pygame.quit()
 
