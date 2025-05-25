@@ -100,7 +100,7 @@ class ActionVM:
             elif op == Action.SetTarget:
                 target = payload
             elif op == Action.GotoFrame2:
-                self.emu.goto_frame(target, int(float(stack.pop())))
+                self.emu.goto_frame(target, int(float(stack.pop())), payload & 0x1)
             elif op == Action.SetTarget2:
                 target = stack.pop()
             elif op == Action.SetProperty:

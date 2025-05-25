@@ -138,7 +138,7 @@ class Native32Reader:
         else:
             payload_idx = self.base + payload
             if payload_idx < len(self.data):
-                if act in (Action.If, Action.GotoFrame, Action.Jump):
+                if act in (Action.If, Action.GotoFrame, Action.GotoFrame2, Action.Jump):
                     payload, = struct.unpack("<h", self.data[payload_idx:payload_idx+2])
                 else:
                     payload = self._get_str(payload_idx)

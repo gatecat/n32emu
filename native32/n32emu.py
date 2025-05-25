@@ -15,7 +15,7 @@ class MovieState:
     _sound_channel: int|None = None
     _cloned_sprite: bool = False # this stops it being deleted when we load a new frame
     _visible: bool = True
-    _playing: bool = False
+    _playing: bool = True
     _next_frame: int|None = 0
 
 @dataclass
@@ -183,14 +183,14 @@ class N32Emu:
         else:
             return self.movies[target].frame + 1
 
-    def goto_frame(self, target, frame):
-        print(f"   goto_frame({target}, {frame})")
+    def goto_frame(self, target, frame, playing=False):
+        print(f"   goto_frame({target}, {frame}, {playing})")
         if target == "":
             self._next_frame = frame
-            self._playing = False
+            self._playing = playing
         else:
             self.movies[target]._next_frame = frame - 1
-            self.movies[target]._playing = False
+            self.movies[target]._playing = playing
 
     def stop_channel(self, i):
         if i == len(self.channel_movie) - 1:
