@@ -38,6 +38,8 @@ class N32Emu:
         self.frame = 0
         self.reload = None
         self.vm = ActionVM(self)
+        self.screen_x = 0
+        self.screen_y = 0
 
     def load_frame(self, i):
         self.cur_frame = self.r.get_frame(i)
@@ -75,7 +77,7 @@ class N32Emu:
         drawlist.sort(key = lambda x: x.depth)
         for d in drawlist:
             img = self.r.get_image(d.image)
-            screen.blit(img, (d.x, d.y))
+            screen.blit(img, (self.screen_x + d.x, self.screen_y + d.y))
 
     def play_sound(self, sound, movie):
         repeat = (sound >> 8) & 0xFF
@@ -336,6 +338,10 @@ class N32Emu:
         elif target[1] == "SSL_SaveSSLData":
             print("SSL_SaveSSLData")
             self.save_data(url, target[2])
+        elif target[1] == "NAV_ScreenMove":
+            dx, dy = url.split("+")
+            self.screen_x = int(dx)
+            self.screen_y = int(dy)
         else:
             assert False, f"Unhandled GetUrl2('{url}', '{target}')"
 
