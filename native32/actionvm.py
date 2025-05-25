@@ -134,6 +134,8 @@ class ActionVM:
                 o2 = stack.pop()
                 o1 = stack.pop()
                 self.emu.get_url(o1, o2)
+            elif op == Action.Trace:
+                print(f"Trace: {stack.pop()}")
             else:
                 assert False, (pc, op, payload)
             pc = npc

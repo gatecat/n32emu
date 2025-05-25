@@ -1,4 +1,5 @@
 import sys, struct
+import re
 from pathlib import Path
 
 from decrypt_header import decrypt_header
@@ -45,6 +46,7 @@ class Native32Reader:
     def __init__(self, f):
         self.data = f.read()
         self.idx = 0
+        self.resolution = (320, 240)
         self._actions_cache = [None]
         self._images_cache = {}
         self._frames_cache = {}
@@ -74,9 +76,12 @@ class Native32Reader:
         assert False, "Native32 header not found"
 
     def process_header(self):
-        self.generator = struct.unpack("<32s", self.data[self.idx+0x4:self.idx+0x24])[0].decode('utf-8').replace('\0', '')
+        self.res_generator = struct.unpack("<48s", self.data[self.idx+0x4:self.idx+0x34])[0].decode('utf-8').replace('\0', '')
+        m = re.match(r"Resolution_(\d+)_(\d+).*", self.res_generator)
+        if m:
+            self.resolution = (int(m.group(1)), int(m.group(2)))
         print()
-        print(f"   Generator:        {self.generator}")
+        print(f"   Generator:        {self.res_generator}")
         self.idx += 0x60
         self.base = self.idx
         self.fps_color_size, self.action_stack_var, self.button_movieclip, self.buffer_sound = struct.unpack('<HHHH', self.data[self.idx:self.idx+0x08])

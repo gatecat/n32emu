@@ -118,6 +118,8 @@ def decompile(out, code, start_index, name):
             o2 = stack.pop()
             o1 = stack.pop()
             print(f"    GetUrl2({o1}, {o2})", file=out)
+        elif op == Action.Trace:
+            print(f"    Trace({stack.pop()})", file=out)
         else:
             assert False, (op, payload)
     print("", file=out)

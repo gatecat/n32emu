@@ -343,7 +343,7 @@ class N32Emu:
         pygame.mixer.pre_init(22050, -16, 1)
         pygame.init()
         pygame.display.set_caption("n32emu")
-        screen = pygame.display.set_mode((320, 240), flags=pygame.SCALED)
+        screen = pygame.display.set_mode(self.r.resolution, flags=pygame.SCALED)
         clock = pygame.time.Clock()
         self.time = 0
         self.ticks = 0
