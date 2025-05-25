@@ -1,11 +1,18 @@
 from pygame import image
 import struct
 
-def decode_image(data):
+def decode_image(data, yuv_dump=None):
     width, height, img_size = struct.unpack("<HHL", data[0:8])
     out = bytearray(width * height * 4)
+    if yuv_dump is not None:
+        yuv = bytearray(width * height * 3)
     i = 8
     def _putxy(x, y, l, cr, cb):
+        if yuv_dump is not None:
+            yuv[(y * width + x) * 3 + 0] = l
+            yuv[(y * width + x) * 3 + 1] = cr
+            yuv[(y * width + x) * 3 + 2] = cb
+
         if cr == 0 and cb == 0:
             out[(y * width + x) * 4 + 3] = 0
             out[(y * width + x) * 4 + 2] = 0
@@ -45,6 +52,8 @@ def decode_image(data):
                 _putquad(pixel, data[i:i+6])
                 pixel += 1
             i += 6
+    if yuv_dump is not None:
+        yuv_dump.write(yuv)
     # assert pixel == (width//2) * (height//2)
     return image.frombytes(bytes(out), (width, height), "RGBA")
 

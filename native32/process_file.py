@@ -171,14 +171,14 @@ class Native32Reader:
                     fmt_payload = f' {payload}'
                 print(f"{act.name:16}{fmt_payload}", file=f)
 
-    def get_image(self, index):
+    def get_image(self, index, yuv_dump=None):
         if index not in self._images_cache:
             ptr = self.base + self.image_idx + 4 * (index - 1)
             img_offset, = struct.unpack("<L", self.data[ptr:ptr+4])
             if img_offset == 0xFFFFFFFF:
                 self._images_cache[index] = None
             img_width, img_height, img_size = struct.unpack("<HHL", self.data[self.base+img_offset:self.base+img_offset+8])
-            self._images_cache[index] = decode_image(self.data[self.base+img_offset:self.base+img_offset+img_size+8])
+            self._images_cache[index] = decode_image(self.data[self.base+img_offset:self.base+img_offset+img_size+8], yuv_dump=yuv_dump)
         return self._images_cache[index]
 
     def extract_images(self, out_dir):
@@ -193,10 +193,10 @@ class Native32Reader:
 
             # Also save raw binary for debug
             img_width, img_height, img_size = struct.unpack("<HHL", self.data[self.base+img_offset:self.base+img_offset+8])
-            with open(f"{out_dir}/images/{index+1}.bin", "wb") as f:
+            with open(f"{out_dir}/images/{index}.bin", "wb") as f:
                 f.write(self.data[self.base+img_offset:self.base+img_offset+img_size+8]) # +8 to include header
-
-            img = self.get_image(index)
+            with open(f"{out_dir}/images/{index}.yuv", "wb") as f:
+                img = self.get_image(index, yuv_dump=f)
             image.save(img, f"{out_dir}/images/{index}.png")
             index += 1
             i += 4
