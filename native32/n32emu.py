@@ -67,8 +67,10 @@ class N32Emu:
         for movie in self.movies.values():
             if not movie._visible:
                 continue
-            frame = self.r.get_movie(movie.movie)[movie.frame]
-            drawlist.append(DrawEntry(frame.image, movie.x + frame.x, movie.y + frame.y, movie.depth))
+            movie_frames = self.r.get_movie(movie.movie)
+            if movie.frame >= 0 and movie.frame < len(movie_frames):
+                frame = movie_frames[movie.frame]
+                drawlist.append(DrawEntry(frame.image, movie.x + frame.x, movie.y + frame.y, movie.depth))
 
         drawlist.sort(key = lambda x: x.depth)
         for d in drawlist:
@@ -326,6 +328,8 @@ class N32Emu:
             self.reload = url[-1]
         elif target[1] == "SSL_PlayPlan":
             print(f"Ignoring SSL_PlayPlan('{url}')")
+        elif target[1] == "SSL_PlayProg":
+            print(f"Ignoring SSL_PlayProg('{url}')")
         elif target[1] == "SSL_GetSSLData":
             print("SSL_GetSSLData")
             self.load_data(url, target[2])

@@ -287,9 +287,6 @@ class Native32Reader:
     def _endian_swap_resample(self, data):
         return bytes(data[(2 * (i // 4)) | ((i & 0x1) ^ 0x1)] for i in range(2 * (len(data) & 0xFFFFFFFE)))
 
-    def _resample(self, data):
-        return bytes(data[(2 * (i // 4)) | (i & 0x1)] for i in range(2 * (len(data) & 0xFFFFFFFE)))
-
     def get_sound(self, idx):
         if idx not in self._sound_cache:
             table_idx = self.sound_table + (idx - 1) * 4
@@ -309,7 +306,7 @@ class Native32Reader:
                 size, = struct.unpack("<L", self.data[begin:begin+4])
                 begin += 4
                 if self.colorspace == "ARGB":
-                    self._sound_cache[idx] = (AudioFormat.RAW, self._resample(self.data[begin:begin+size]))
+                    self._sound_cache[idx] = (AudioFormat.RAW, self.data[begin:begin+size])
                 else:
                     self._sound_cache[idx] = (AudioFormat.RAW, self._endian_swap_resample(self.data[begin:begin+size]))
         return self._sound_cache[idx]
