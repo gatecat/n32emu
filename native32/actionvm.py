@@ -36,7 +36,7 @@ def _int(x):
 ops = {
     Action.Not: (1, lambda a: int(not _int(a))),
     Action.Add: (2, lambda a, b: _float(a) + _float(b)),
-    Action.Subtract: (2, lambda a, b: _float(a) - float(b)),
+    Action.Subtract: (2, lambda a, b: _float(a) - _float(b)),
     Action.Multiply: (2, lambda a, b: _float(a) * _float(b)),
     Action.Divide: (2, lambda a, b: _float(a) / _float(b) if _float(b) != 0 else 0),
     Action.Equals: (2, lambda a, b: int(_float(a) == _float(b))),

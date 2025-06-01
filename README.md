@@ -1,6 +1,8 @@
 # Sunplus Native32 interpreter
 
-Proper documentation and packages to follow...
+[Native32 Format reverse-engineering write-up](doc/native32.md)
+
+End-user documentation and packages to follow...
 
 Requires Python 3 and pygame
 
